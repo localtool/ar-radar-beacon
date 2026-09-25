@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>AR Breadcrumb & Radar Beacon</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #000;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #fff;
+    }
+
+    #app-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Video Feed Background */
+    #camera-feed {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 1;
+    }
+
+    /* Three.js Canvas Layer */
+    #ar-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    /* UI Overlay Layer */
+    #ui-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 3;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 20px;
+      pointer-events: none;
+    }
+
+    .interactive {
+      pointer-events: auto;
+    }
+
+    /* Header Bar */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 12px 16px;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: #10b981;
+      box-shadow: 0 0 8px #10b981;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.4; }
+      100% { opacity: 1; }
+    }
+
+    /* Compass & Mode Info */
+    .telemetry {
+      font-family: monospace;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+
+    /* Off-Screen Target Indicator */
+    #offscreen-indicator {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(239, 68, 68, 0.85);
+      color: white;
+      padding: 10px 16px;
+      border-radius: 30px;
+      font-weight: 700;
+      font-size: 13px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
+      z-index: 4;
+    }
+
+    #offscreen-indicator.left {
+      left: 15px;
+    }
+
+    #offscreen-indicator.right {
+      right: 15px;
+    }
+
+    /* Bottom Control Panel */
+    .bottom-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* Radar View */
+    .radar-card {
+      background: rgba(15, 23, 42, 0.80);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    #radar-canvas {
+      width: 90px;
+      height: 90px;
+      background: radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, rgba(15, 23, 42, 0.8) 70%);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 50%;
+    }
+
+    .radar-info {
+      flex: 1;
+    }
+
+    .radar-info h3 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: #f8fafc;
+    }
+
+    .radar-info p {
+      font-size: 12px;
+      color: #94a3b8;
+      line-height: 1.4;
+    }
+
+    /* Permission Modal */
+    #permission-modal {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(15, 23, 42, 0.95);
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 30px;
+      text-align: center;
+    }
+
+    #permission-modal h1 {
+      font-size: 24px;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #10b981, #3b82f6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    #permission-modal p {
+      font-size: 14px;
+      color: #94a3b8;
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    .btn {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+      border: none;
+      padding: 14px 28px;
+      font-size: 15px;
+      font-weight: 600;
+      border-radius: 12px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
+      transition: transform 0.2s;
+    }
+
+    .btn:active {
+      transform: scale(0.96);
+    }
+  </style>
+
+  <!-- Three.js Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+  <div id="app-container">
+    <!-- Camera Feed -->
+    <video id="camera-feed" autoplay playsinline muted></video>
+
+    <!-- 3D AR Layer -->
+    <canvas id="ar-canvas"></canvas>
+
+    <!-- Off-Screen Guidance Arrow -->
+    <div id="offscreen-indicator">
+      <span id="indicator-arrow">◄</span>
+      <span id="indicator-text">Target Left</span>
+    </div>
+
+    <!-- UI Overlay Layer -->
+    <div id="ui-layer">
+      <!-- Top Header -->
+      <div class="header">
+        <div class="status-badge">
+          <div class="status-dot"></div>
+          <span>AR Beacon Active</span>
+        </div>
+        <div class="telemetry">
+          HDG: <span id="heading-val">0</span>° | BLE: <span id="ble-val">Strong</span>
+        </div>
+      </div>
+
+      <!-- Bottom Dashboard -->
+      <div class="bottom-panel">
+        <div class="radar-card">
+          <canvas id="radar-canvas" width="180" height="180"></canvas>
+          <div class="radar-info">
+            <h3 id="target-name">Target: Alex</h3>
+            <p>Distance: <strong id="target-dist" style="color: #10b981;">0m</strong></p>
+            <p>Bearing: <span id="target-bearing">0°</span></p>
+            <p id="target-mode" style="font-size: 11px; margin-top: 4px; color: #64748b;">Sync: GPS + BLE Mesh</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Permission Modal -->
+    <div id="permission-modal" class="interactive">
+      <h1>AR Radar Beacon</h1>
+      <p>This demo requires camera, location, and motion sensor access to project real-time 3D directional beacons onto your physical surroundings.</p>
+      <button class="btn" id="start-btn">Initialize AR Sensors</button>
+    </div>
+  </div>
+
+  <script>
+    // --- State & Coordinates ---
+    const state = {
+      userCoords: { lat: 0, lng: 0 },
+      // Target position (Simulated 35m northeast of initial location)
+      targetCoords: { lat: 0, lng: 0, name: "Alex" },
+      heading: 0,
+      targetDistance: 0,
+      targetBearing: 0,
+      initialized: false
+    };
+
+    // --- DOM Elements ---
+    const cameraFeed = document.getElementById('camera-feed');
+    const arCanvas = document.getElementById('ar-canvas');
+    const radarCanvas = document.getElementById('radar-canvas');
+    const radarCtx = radarCanvas.getContext('2d');
+    const headingVal = document.getElementById('heading-val');
+    const targetDist = document.getElementById('target-dist');
+    const targetBearing = document.getElementById('target-bearing');
+    const offscreenIndicator = document.getElementById('offscreen-indicator');
+    const indicatorArrow = document.getElementById('indicator-arrow');
+    const indicatorText = document.getElementById('indicator-text');
+    const startBtn = document.getElementById('start-btn');
+    const modal = document.getElementById('permission-modal');
+
+    // --- Three.js Setup ---
+    let scene, camera, renderer, beaconMesh, beaconRing;
+
+    function initThreeJS() {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+      
+      renderer = new THREE.WebGLRenderer({ canvas: arCanvas, alpha: true, antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+
+      // Light source
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+      scene.add(ambientLight);
+
+      const pointLight = new THREE.PointLight(0x10b981, 2, 50);
+      pointLight.position.set(0, 5, 0);
+      scene.add(pointLight);
+
+      // 3D Beacon Node (Glow Cylinder + Ring)
+      const group = new THREE.Group();
+
+      // Inner Core
+      const geoCore = new THREE.CylinderGeometry(0.2, 0.2, 3, 16);
+      const matCore = new THREE.MeshBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.8 });
+      const core = new THREE.Mesh(geoCore, matCore);
+      group.add(core);
+
+      // Outer Pulse Ring
+      const geoRing = new THREE.RingGeometry(0.8, 1.2, 32);
+      const matRing = new THREE.MeshBasicMaterial({ color: 0x3b82f6, side: THREE.DoubleSide, transparent: true, opacity: 0.6 });
+      beaconRing = new THREE.Mesh(geoRing, matRing);
+      beaconRing.rotation.x = Math.PI / 2;
+      group.add(beaconRing);
+
+      beaconMesh = group;
+      scene.add(beaconMesh);
+
+      camera.position.set(0, 0, 0);
+    }
+
+    // --- Geo & Math Utilities ---
+    function toRad(deg) { return deg * (Math.PI / 180); }
+    function toDeg(rad) { return rad * (180 / Math.PI); }
+
+    // Haversine Distance (Meters)
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    // Forward Compass Bearing (Degrees)
+    function calculateBearing(lat1, lon1, lat2, lon2) {
+      const y = Math.sin(toRad(lon2 - lon1)) * Math.cos(toRad(lat2));
+      const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+                Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(toRad(lon2 - lon1));
+      const brng = toDeg(Math.atan2(y, x));
+      return (brng + 360) % 360;
+    }
+
+    // --- Initialization & Hardware Permissions ---
+    startBtn.addEventListener('click', async () => {
+      try {
+        // 1. Camera Feed
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        cameraFeed.srcObject = stream;
+
+        // 2. Geolocation Tracking
+        if ('geolocation' in navigator) {
+          navigator.geolocation.watchPosition(
+            (pos) => {
+              state.userCoords.lat = pos.coords.latitude;
+              state.userCoords.lng = pos.coords.longitude;
+
+              // If target not set yet, simulate target 35m northeast
+              if (state.targetCoords.lat === 0) {
+                state.targetCoords.lat = state.userCoords.lat + 0.00028;
+                state.targetCoords.lng = state.userCoords.lng + 0.00028;
+              }
+            },
+            (err) => console.warn(err),
+            { enableHighAccuracy: true }
+          );
+        }
+
+        // 3. Orientation / Compass
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+          const permission = await DeviceOrientationEvent.requestPermission();
+          if (permission === 'granted') {
+            window.addEventListener('deviceorientation', handleOrientation);
+          }
+        } else {
+          window.addEventListener('deviceorientation', handleOrientation);
+        }
+
+        initThreeJS();
+        modal.style.display = 'none';
+        state.initialized = true;
+        animate();
+
+      } catch (e) {
+        alert("Camera or sensor access denied. " + e.message);
+      }
+    });
+
+    function handleOrientation(e) {
+      // iOS webkitCompassHeading vs Android alpha
+      if (e.webkitCompassHeading) {
+        state.heading = e.webkitCompassHeading;
+      } else if (e.alpha) {
+        state.heading = (360 - e.alpha) % 360;
+      }
+      headingVal.innerText = Math.round(state.heading);
+    }
+
+    // --- Radar Drawing Function ---
+    function drawRadar() {
+      const w = radarCanvas.width;
+      const h = radarCanvas.height;
+      const cx = w / 2;
+      const cy = h / 2;
+
+      radarCtx.clearRect(0, 0, w, h);
+
+      // Outer rings
+      radarCtx.strokeStyle = 'rgba(16, 185, 129, 0.25)';
+      radarCtx.lineWidth = 1.5;
+      radarCtx.beginPath(); radarCtx.arc(cx, cy, 35, 0, Math.PI * 2); radarCtx.stroke();
+      radarCtx.beginPath(); radarCtx.arc(cx, cy, 70, 0, Math.PI * 2); radarCtx.stroke();
+
+      // Heading indicator line (Top = Device Facing)
+      radarCtx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      radarCtx.beginPath();
+      radarCtx.moveTo(cx, cy);
+      radarCtx.lineTo(cx, cy - 75);
+      radarCtx.stroke();
+
+      // Target Blip
+      if (state.targetDistance > 0) {
+        const relativeAngle = toRad(state.targetBearing - state.heading);
+        // Scale distance to radar radius (max 100m)
+        const radius = Math.min(state.targetDistance / 100, 1) * 70;
+
+        const blipX = cx + radius * Math.sin(relativeAngle);
+        const blipY = cy - radius * Math.cos(relativeAngle);
+
+        // Draw Target Dot
+        radarCtx.fillStyle = '#10b981';
+        radarCtx.shadowColor = '#10b981';
+        radarCtx.shadowBlur = 10;
+        radarCtx.beginPath();
+        radarCtx.arc(blipX, blipY, 5, 0, Math.PI * 2);
+        radarCtx.fill();
+        radarCtx.shadowBlur = 0;
+      }
+    }
+
+    // --- Render Loop ---
+    function animate() {
+      requestAnimationFrame(animate);
+
+      if (!state.initialized) return;
+
+      // Calculate Target Vector
+      if (state.userCoords.lat !== 0) {
+        state.targetDistance = calculateDistance(
+          state.userCoords.lat, state.userCoords.lng,
+          state.targetCoords.lat, state.targetCoords.lng
+        );
+
+        state.targetBearing = calculateBearing(
+          state.userCoords.lat, state.userCoords.lng,
+          state.targetCoords.lat, state.targetCoords.lng
+        );
+
+        targetDist.innerText = `${Math.round(state.targetDistance)}m`;
+        targetBearing.innerText = `${Math.round(state.targetBearing)}°`;
+      }
+
+      // Calculate Relative Angle (Device Heading vs Target Bearing)
+      let relativeAngle = (state.targetBearing - state.heading + 360) % 360;
+      if (relativeAngle > 180) relativeAngle -= 360; // Range [-180, 180]
+
+      // Update 3D Beacon Matrix Offset
+      const cameraFOV = 60; // Horiz FOV approx
+      const rad = toRad(relativeAngle);
+      
+      // Position beacon in 3D Space
+      beaconMesh.position.x = Math.sin(rad) * 10;
+      beaconMesh.position.z = -Math.cos(rad) * 10;
+      beaconMesh.position.y = -1.5; // Slightly below horizon
+
+      // Animate Beacon Ring Expansion
+      const time = Date.now() * 0.003;
+      beaconRing.scale.set(1 + Math.sin(time) * 0.2, 1 + Math.sin(time) * 0.2, 1);
+
+      // Screen Off-Screen Indicator Logic
+      if (Math.abs(relativeAngle) > cameraFOV / 2) {
+        offscreenIndicator.style.display = 'flex';
+        if (relativeAngle < 0) {
+          offscreenIndicator.className = 'left';
+          indicatorArrow.innerText = '◄';
+          indicatorText.innerText = `Turn Left (${Math.abs(Math.round(relativeAngle))}°)`;
+        } else {
+          offscreenIndicator.className = 'right';
+          indicatorArrow.innerText = '►';
+          indicatorText.innerText = `Turn Right (${Math.round(relativeAngle)}°)`;
+        }
+      } else {
+        offscreenIndicator.style.display = 'none';
+      }
+
+      // Render 3D Scene
+      renderer.render(scene, camera);
+
+      // Render Radar HUD
+      drawRadar();
+    }
+
+    // Window Resize Handler
+    window.addEventListener('resize', () => {
+      if (!renderer) return;
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
