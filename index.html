@@ -138,13 +138,12 @@
         html {
             min-height: 100%;
             background: #050508;
-            overscroll-behavior-y: none;
         }
 
         body {
             min-height: 100dvh;
             min-height: 100svh;
-            overscroll-behavior-y: none;
+            overflow: hidden;
         }
 
         button, [role="button"] {
@@ -159,11 +158,31 @@
         }
 
         #app {
-            min-height: 100dvh;
-            min-height: 100svh;
+            height: 100dvh;
+            min-height: 0;
+            max-height: 100dvh;
             padding-right: var(--safe-right);
             padding-bottom: var(--safe-bottom);
             padding-left: var(--safe-left);
+        }
+
+        /* Every app screen owns its vertical scroll area. This is important on
+           iOS because the flex parent is viewport-bound rather than document-bound. */
+        #screen-user,
+        #screen-location,
+        #screen-dashboard {
+            min-height: 0;
+            overflow-x: hidden;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior-y: contain;
+            scrollbar-width: none;
+        }
+
+        #screen-user::-webkit-scrollbar,
+        #screen-location::-webkit-scrollbar,
+        #screen-dashboard::-webkit-scrollbar {
+            display: none;
         }
 
         header {
@@ -347,7 +366,7 @@
             </div>
         </section>
 
-        <section id="screen-dashboard" class="hidden flex-1 flex flex-col p-5 z-10 transition-all duration-300 overflow-y-auto no-scrollbar overscroll-contain" style="-webkit-overflow-scrolling:touch;padding-bottom:calc(1.25rem + var(--safe-bottom));">
+        <section id="screen-dashboard" class="hidden flex-1 flex flex-col p-5 z-10 transition-all duration-300 no-scrollbar overscroll-contain" style="-webkit-overflow-scrolling:touch;padding-bottom:calc(1.25rem + var(--safe-bottom));">
             
             <!-- Dashboard Welcome Header -->
             <div class="flex items-center justify-between mb-5 liquid-glass p-4 rounded-3xl">
