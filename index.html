@@ -1,553 +1,1148 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>AR Breadcrumb & Radar Beacon</title>
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      user-select: none;
-      -webkit-user-select: none;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Trip Explorer | Vietnam & Bangkok 2026</title>
+    
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        glass: {
+                            bg: 'rgba(18, 18, 26, 0.65)',
+                            card: 'rgba(255, 255, 255, 0.05)',
+                            border: 'rgba(255, 255, 255, 0.12)',
+                            glow: 'rgba(120, 119, 198, 0.15)',
+                            highlight: 'rgba(255, 255, 255, 0.2)'
+                        },
+                        apple: {
+                            blue: '#0A84FF',
+                            purple: '#BF5AF2',
+                            pink: '#FF375F',
+                            green: '#30D158',
+                            orange: '#FF9F0A',
+                            yellow: '#FFD60A',
+                            cyan: '#64D2FF'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['SF Pro Display', '-apple-system', 'BlinkMacSystemFont', 'Inter', 'Segoe UI', 'Roboto', 'sans-serif'],
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 8s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'float': 'float 6s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0px)' },
+                            '50%': { transform: 'translateY(-10px)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif;
+            background-color: #050508;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            overflow-x: hidden;
+        }
 
-    body, html {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background-color: #000;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      color: #fff;
-    }
+        /* Apple Frosted Liquid Glass Utility */
+        .liquid-glass {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
+            backdrop-filter: blur(30px) saturate(190%);
+            -webkit-backdrop-filter: blur(30px) saturate(190%);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.25);
+        }
 
-    #app-container {
-      position: relative;
-      width: 100vw;
-      height: 100vh;
-      overflow: hidden;
-    }
+        .liquid-glass-card {
+            background: linear-gradient(145deg, rgba(30, 30, 45, 0.7) 0%, rgba(15, 15, 25, 0.6) 100%);
+            backdrop-filter: blur(25px) saturate(180%);
+            -webkit-backdrop-filter: blur(25px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.2);
+        }
 
-    /* Video Feed Background */
-    #camera-feed {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      z-index: 1;
-    }
+        /* Ambient Glowing Liquid Blobs */
+        .ambient-blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.5;
+            pointer-events: none;
+            z-index: 0;
+        }
 
-    /* Three.js Canvas Layer */
-    #ar-canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 2;
-      pointer-events: none;
-    }
+        /* Card Swipe Physics */
+        .card-stack {
+            position: relative;
+            perspective: 1000px;
+        }
 
-    /* UI Overlay Layer */
-    #ui-layer {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 3;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      padding: 20px;
-      pointer-events: none;
-    }
+        .swipe-card {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform-origin: center bottom;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.25s ease;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+            will-change: transform, opacity;
+        }
 
-    .interactive {
-      pointer-events: auto;
-    }
+        .swipe-card.dragging {
+            transition: none !important;
+        }
 
-    /* Header Bar */
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: rgba(15, 23, 42, 0.75);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 16px;
-      padding: 12px 16px;
-    }
+        .swipe-card.swiped-left {
+            transform: translate3d(-150%, 0, 0) rotate(-35deg) !important;
+            opacity: 0 !important;
+        }
 
-    .status-badge {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 13px;
-      font-weight: 600;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
-    }
+        .swipe-card.swiped-right {
+            transform: translate3d(150%, 0, 0) rotate(35deg) !important;
+            opacity: 0 !important;
+        }
 
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background-color: #10b981;
-      box-shadow: 0 0 8px #10b981;
-      animation: pulse 2s infinite;
-    }
+        /* Custom scrollbar hiding */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
 
-    @keyframes pulse {
-      0% { opacity: 1; }
-      50% { opacity: 0.4; }
-      100% { opacity: 1; }
-    }
+        /* Mobile-first reliability and performance */
+        :root {
+            color-scheme: dark;
+            --safe-top: env(safe-area-inset-top, 0px);
+            --safe-right: env(safe-area-inset-right, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+            --safe-left: env(safe-area-inset-left, 0px);
+        }
 
-    /* Compass & Mode Info */
-    .telemetry {
-      font-family: monospace;
-      font-size: 12px;
-      color: #94a3b8;
-    }
+        html {
+            min-height: 100%;
+            background: #050508;
+            overscroll-behavior-y: none;
+        }
 
-    /* Off-Screen Target Indicator */
-    #offscreen-indicator {
-      position: absolute;
-      top: 50%;
-      transform: translateY(-50%);
-      background: rgba(239, 68, 68, 0.85);
-      color: white;
-      padding: 10px 16px;
-      border-radius: 30px;
-      font-weight: 700;
-      font-size: 13px;
-      display: none;
-      align-items: center;
-      gap: 8px;
-      backdrop-filter: blur(8px);
-      box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
-      z-index: 4;
-    }
+        body {
+            min-height: 100dvh;
+            min-height: 100svh;
+            overscroll-behavior-y: none;
+        }
 
-    #offscreen-indicator.left {
-      left: 15px;
-    }
+        button, [role="button"] {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            touch-action: manipulation;
+        }
 
-    #offscreen-indicator.right {
-      right: 15px;
-    }
+        button {
+            font: inherit;
+        }
 
-    /* Bottom Control Panel */
-    .bottom-panel {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
+        #app {
+            min-height: 100dvh;
+            min-height: 100svh;
+            padding-right: var(--safe-right);
+            padding-bottom: var(--safe-bottom);
+            padding-left: var(--safe-left);
+        }
 
-    /* Radar View */
-    .radar-card {
-      background: rgba(15, 23, 42, 0.80);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 20px;
-      padding: 16px;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
+        header {
+            padding-top: max(1rem, var(--safe-top));
+        }
 
-    #radar-canvas {
-      width: 90px;
-      height: 90px;
-      background: radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, rgba(15, 23, 42, 0.8) 70%);
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      border-radius: 50%;
-    }
+        .ambient-blob {
+            contain: strict;
+            will-change: opacity;
+        }
 
-    .radar-info {
-      flex: 1;
-    }
+        .liquid-glass,
+        .liquid-glass-card {
+            -webkit-transform: translateZ(0);
+            transform: translateZ(0);
+        }
 
-    .radar-info h3 {
-      font-size: 16px;
-      font-weight: 700;
-      margin-bottom: 4px;
-      color: #f8fafc;
-    }
+        /* iOS Safari can leave fixed overlays underneath the browser chrome unless
+           the overlay uses the dynamic viewport units. */
+        #modal-cards {
+            height: 100dvh;
+            height: 100svh;
+            padding-top: max(1rem, var(--safe-top));
+            padding-right: max(1rem, var(--safe-right));
+            padding-bottom: max(1rem, var(--safe-bottom));
+            padding-left: max(1rem, var(--safe-left));
+            overscroll-behavior: contain;
+        }
 
-    .radar-info p {
-      font-size: 12px;
-      color: #94a3b8;
-      line-height: 1.4;
-    }
+        #card-stack {
+            min-height: 0;
+            height: min(450px, 68dvh);
+        }
 
-    /* Permission Modal */
-    #permission-modal {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(15, 23, 42, 0.95);
-      z-index: 10;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      padding: 30px;
-      text-align: center;
-    }
+        .swipe-card {
+            -webkit-user-select: none;
+            user-select: none;
+        }
 
-    #permission-modal h1 {
-      font-size: 24px;
-      margin-bottom: 12px;
-      background: linear-gradient(135deg, #10b981, #3b82f6);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
+        /* Reduce expensive blur/animation work on devices that request less motion. */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                scroll-behavior: auto !important;
+                animation-duration: 0.001ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.001ms !important;
+            }
+        }
 
-    #permission-modal p {
-      font-size: 14px;
-      color: #94a3b8;
-      margin-bottom: 24px;
-      line-height: 1.5;
-    }
+        @media (max-width: 430px) {
+            #screen-user,
+            #screen-location,
+            #screen-dashboard {
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
 
-    .btn {
-      background: linear-gradient(135deg, #10b981, #059669);
-      color: white;
-      border: none;
-      padding: 14px 28px;
-      font-size: 15px;
-      font-weight: 600;
-      border-radius: 12px;
-      cursor: pointer;
-      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
-      transition: transform 0.2s;
-    }
+            #card-stack {
+                height: min(430px, 66dvh);
+            }
+        }
 
-    .btn:active {
-      transform: scale(0.96);
-    }
-  </style>
+        @media (max-height: 700px) {
+            #card-stack {
+                height: min(390px, 60dvh);
+            }
 
-  <!-- Three.js Library -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+            #screen-user,
+            #screen-location {
+                padding-top: 1rem;
+            }
+        }
+
+        @supports not (height: 100dvh) {
+            body, #app, #modal-cards {
+                min-height: 100vh;
+                height: 100vh;
+            }
+        }
+
+    </style>
 </head>
-<body>
+<body class="h-full antialiased flex flex-col justify-between relative selection:bg-purple-500/30 selection:text-purple-200">
 
-  <div id="app-container">
-    <!-- Camera Feed -->
-    <video id="camera-feed" autoplay playsinline muted></video>
-
-    <!-- 3D AR Layer -->
-    <canvas id="ar-canvas"></canvas>
-
-    <!-- Off-Screen Guidance Arrow -->
-    <div id="offscreen-indicator">
-      <span id="indicator-arrow">◄</span>
-      <span id="indicator-text">Target Left</span>
+    <div class="fixed inset-0 overflow-hidden pointer-events-none z-0">
+        <div class="ambient-blob w-80 h-80 bg-apple-purple top-[-50px] left-[-50px] animate-pulse-slow"></div>
+        <div class="ambient-blob w-96 h-96 bg-apple-blue bottom-[-100px] right-[-50px] animate-pulse-slow" style="animation-delay: 2s;"></div>
+        <div class="ambient-blob w-72 h-72 bg-apple-pink top-[40%] left-[20%] animate-pulse-slow" style="animation-delay: 4s;"></div>
     </div>
 
-    <!-- UI Overlay Layer -->
-    <div id="ui-layer">
-      <!-- Top Header -->
-      <div class="header">
-        <div class="status-badge">
-          <div class="status-dot"></div>
-          <span>AR Beacon Active</span>
-        </div>
-        <div class="telemetry">
-          HDG: <span id="heading-val">0</span>° | BLE: <span id="ble-val">Strong</span>
-        </div>
-      </div>
+    <!-- Main Container App -->
+    <div id="app" class="max-w-md mx-auto w-full min-h-screen bg-transparent flex flex-col relative overflow-hidden z-10">
+        
+        <!-- Header Bar -->
+        <header class="p-4 sticky top-0 z-30 flex items-center justify-between backdrop-blur-md bg-black/30 border-b border-white/10">
+            <div class="flex items-center space-x-2.5">
+                <div class="w-7 h-7 rounded-full bg-gradient-to-tr from-apple-blue to-apple-purple flex items-center justify-center text-xs font-black shadow-lg shadow-purple-500/30">
+                    
+                </div>
+                <div>
+                    <span class="font-bold text-white text-base tracking-tight">Trip Portal</span>
+                    <span class="text-[10px] text-slate-400 block -mt-1 font-medium">Oct 22 – Oct 31, 2026</span>
+                </div>
+            </div>
+            
+            <div id="active-info-badge" class="hidden flex items-center space-x-2 bg-white/10 hover:bg-white/15 transition border border-white/15 px-3 py-1.5 rounded-full text-xs font-medium text-slate-200 cursor-pointer backdrop-blur-xl" onclick="openLocationSelector()">
+                <span id="badge-user-avatar" class="text-sm">👤</span>
+                <span id="badge-user-name" class="font-semibold text-white">User</span>
+                <span class="text-slate-500">•</span>
+                <span id="badge-location-flag" class="text-sm">🇻🇳</span>
+                <span id="badge-location-name" class="text-slate-300">Vietnam</span>
+            </div>
+        </header>
 
-      <!-- Bottom Dashboard -->
-      <div class="bottom-panel">
-        <div class="radar-card">
-          <canvas id="radar-canvas" width="180" height="180"></canvas>
-          <div class="radar-info">
-            <h3 id="target-name">Target: Alex</h3>
-            <p>Distance: <strong id="target-dist" style="color: #10b981;">0m</strong></p>
-            <p>Bearing: <span id="target-bearing">0°</span></p>
-            <p id="target-mode" style="font-size: 11px; margin-top: 4px; color: #64748b;">Sync: GPS + BLE Mesh</p>
-          </div>
+        <section id="screen-user" class="flex-1 flex flex-col justify-between p-6 z-10 transition-all duration-300">
+            <div class="mt-2">
+                <div class="inline-flex items-center space-x-2 px-3 py-1 bg-white/10 border border-white/15 rounded-full text-xs text-purple-300 font-medium mb-4 backdrop-blur-md">
+                    <span>✨</span>
+                    <span>Maldives &rarr; Vietnam &rarr; Bangkok</span>
+                </div>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight leading-tight">Who are you?</h1>
+                <p class="text-slate-400 text-sm mt-1.5 leading-relaxed">Select your profile to customize recommendations for MotorMania sourcing & fun.</p>
+
+                <!-- 6 User Profiles Grid -->
+                <div class="grid grid-cols-2 gap-3.5 mt-6" id="user-grid">
+                    <!-- JavaScript populates 6 friends here -->
+                </div>
+            </div>
+
+            <div class="text-center py-4 text-xs text-slate-500 border-t border-white/10 mt-6">
+                Mobile-Optimized • Liquid Glass Edition
+            </div>
+        </section>
+
+        <section id="screen-location" class="hidden flex-1 flex flex-col justify-between p-6 z-10 transition-all duration-300">
+            <div class="mt-2">
+                <button type="button" onclick="goToScreen('screen-user')" class="text-xs text-slate-400 hover:text-white mb-4 flex items-center space-x-1.5 transition">
+                    <span>&larr;</span> <span>Change User Profile</span>
+                </button>
+                
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">Where are you right now?</h1>
+                <p class="text-slate-400 text-sm mt-1.5">Pick your location to browse local spare parts suppliers, food, and nightlife.</p>
+
+                <div class="space-y-4 mt-6">
+                    <!-- Vietnam Option -->
+                    <button type="button" onclick="selectLocation('vietnam')" class="w-full text-left p-5 rounded-3xl liquid-glass hover:bg-white/10 transition-all group flex items-start space-x-4 border border-white/15 relative overflow-hidden">
+                        <div class="absolute top-0 right-0 w-32 h-32 bg-apple-blue/10 rounded-full blur-2xl pointer-events-none"></div>
+                        <span class="text-4xl p-3 bg-white/10 rounded-2xl border border-white/10 group-hover:scale-110 transition-transform">🇻🇳</span>
+                        <div class="flex-1 z-10">
+                            <div class="flex items-center justify-between">
+                                <h3 class="font-bold text-white text-lg tracking-tight">Vietnam</h3>
+                                <span class="text-[10px] font-semibold px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full">Oct 22-29</span>
+                            </div>
+                            <p class="text-xs text-slate-400 mt-1">Ho Chi Minh City (SGN) • SOHO Residence</p>
+                            <span class="inline-block mt-3 text-xs font-semibold text-apple-blue flex items-center space-x-1">
+                                <span>MotorMania Parts & Malls</span> <span>&rarr;</span>
+                            </span>
+                        </div>
+                    </button>
+
+                    <!-- Bangkok Option -->
+                    <button type="button" onclick="selectLocation('bangkok')" class="w-full text-left p-5 rounded-3xl liquid-glass hover:bg-white/10 transition-all group flex items-start space-x-4 border border-white/15 relative overflow-hidden">
+                        <div class="absolute top-0 right-0 w-32 h-32 bg-apple-orange/10 rounded-full blur-2xl pointer-events-none"></div>
+                        <span class="text-4xl p-3 bg-white/10 rounded-2xl border border-white/10 group-hover:scale-110 transition-transform">🇹🇭</span>
+                        <div class="flex-1 z-10">
+                            <div class="flex items-center justify-between">
+                                <h3 class="font-bold text-white text-lg tracking-tight">Bangkok</h3>
+                                <span class="text-[10px] font-semibold px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full">Oct 29-31</span>
+                            </div>
+                            <p class="text-xs text-slate-400 mt-1">Thailand • Grand Watergate Hotel</p>
+                            <span class="inline-block mt-3 text-xs font-semibold text-apple-orange flex items-center space-x-1">
+                                <span>Nightlife, Food & Fun</span> <span>&rarr;</span>
+                            </span>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <div class="text-center py-4 text-xs text-slate-500 border-t border-white/10 mt-6">
+                Switch destinations seamlessly anytime
+            </div>
+        </section>
+
+        <section id="screen-dashboard" class="hidden flex-1 flex flex-col p-5 z-10 transition-all duration-300 overflow-y-auto no-scrollbar overscroll-contain" style="-webkit-overflow-scrolling:touch;padding-bottom:calc(1.25rem + var(--safe-bottom));">
+            
+            <!-- Dashboard Welcome Header -->
+            <div class="flex items-center justify-between mb-5 liquid-glass p-4 rounded-3xl">
+                <div class="flex items-center space-x-3">
+                    <span id="dash-user-avatar" class="text-3xl p-2 bg-white/10 rounded-2xl border border-white/10">👤</span>
+                    <div>
+                        <p class="text-xs text-slate-400 font-medium">Welcome back, <span id="dash-user-name" class="text-white font-bold">Explorer</span></p>
+                        <h2 class="text-lg font-extrabold text-white tracking-tight" id="dash-location-title">Vietnam Portal</h2>
+                    </div>
+                </div>
+                <button type="button" aria-label="Switch destination" onclick="openLocationSelector()" class="p-2.5 text-xs font-medium text-apple-cyan bg-white/10 hover:bg-white/15 border border-white/15 rounded-2xl transition backdrop-blur-md">
+                    Switch
+                </button>
+            </div>
+
+            <!-- Hotel Info Glass Card -->
+            <div class="mb-5 liquid-glass-card p-4 rounded-3xl relative overflow-hidden">
+                <div class="absolute -right-6 -bottom-6 w-28 h-28 bg-purple-500/20 rounded-full blur-xl pointer-events-none"></div>
+                <div class="flex justify-between items-start z-10 relative">
+                    <div>
+                        <span class="text-[10px] font-bold tracking-widest uppercase bg-white/10 border border-white/15 px-2.5 py-0.5 rounded-full text-purple-300">Hotel Details</span>
+                        <h4 class="font-bold text-white text-base mt-2" id="hotel-name">SOHO Residence & Hotel</h4>
+                        <p class="text-xs text-slate-300 mt-0.5" id="hotel-sub">District 1, Ho Chi Minh City</p>
+                    </div>
+                    <span class="text-2xl p-2 bg-white/10 rounded-2xl border border-white/10">🏨</span>
+                </div>
+                <div class="mt-4 pt-3 border-t border-white/10 flex justify-between items-center text-xs text-slate-300 relative z-10">
+                    <span id="hotel-dates" class="text-slate-400">Oct 22 - Oct 29</span>
+                    <button type="button" onclick="copyAddress()" class="text-slate-900 font-bold bg-white hover:bg-slate-200 px-3 py-1.5 rounded-xl text-xs transition active:scale-95 shadow-md">
+                        Copy Address
+                    </button>
+                </div>
+            </div>
+
+            <!-- Category Section Title -->
+            <div class="flex items-center justify-between mb-3 px-1">
+                <h3 class="font-extrabold text-white text-xs uppercase tracking-wider text-slate-400">Categories & Spots</h3>
+                <span class="text-[11px] text-slate-500">Tap to swipe deck</span>
+            </div>
+
+            <!-- Category Grid Buttons -->
+            <div class="grid grid-cols-2 gap-3" id="category-grid">
+                <!-- Dynamic Category Buttons populated via JS -->
+            </div>
+
+            <!-- MotorMania / Tip Glass Card -->
+            <div class="mt-5 p-4 liquid-glass rounded-3xl border border-white/10">
+                <div class="flex items-center space-x-2 mb-2">
+                    <span class="text-sm">💡</span>
+                    <h4 class="font-bold text-white text-xs uppercase tracking-wider">MotorMania Pro Tip</h4>
+                </div>
+                <p class="text-xs text-slate-300 leading-relaxed" id="dashboard-tip">
+                    For MotorMania motorcycle parts in Ho Chi Minh City, head to Tan Thanh Market in District 5 early in the morning for wholesale gear and components.
+                </p>
+            </div>
+        </section>
+
+        <div id="modal-cards" class="hidden fixed inset-0 bg-black/85 backdrop-blur-2xl z-50 flex flex-col justify-between p-4 max-w-md mx-auto">
+            
+            <!-- Modal Header Controls -->
+            <div class="flex items-center justify-between text-white py-2 px-2 z-20">
+                <div>
+                    <span id="modal-category-tag" class="text-xs font-bold px-3 py-1 rounded-full bg-white/10 border border-white/15 text-purple-300 uppercase tracking-wider">Category</span>
+                    <p id="modal-stack-counter" class="text-xs text-slate-400 mt-1 font-medium">1 of 5 spots</p>
+                </div>
+                <!-- Close Button X -->
+                <button type="button" aria-label="Close recommendations" onclick="closeCardModal()" class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-white flex items-center justify-center font-bold text-lg transition active:scale-90">
+                    ✕
+                </button>
+            </div>
+
+            <!-- Cards Container Area -->
+            <div class="relative flex-1 my-3 flex items-center justify-center">
+                <div id="card-stack" class="w-full h-[450px] max-h-[72vh] relative card-stack">
+                    <!-- Cards injected here dynamically -->
+                </div>
+            </div>
+
+            <!-- Swipe Controls / Action Bar -->
+            <div class="flex items-center justify-center space-x-6 py-3 z-20">
+                <button type="button" onclick="swipeTopCard('left')" class="w-14 h-14 rounded-full bg-white/10 border border-white/20 text-apple-pink shadow-xl flex items-center justify-center text-xl font-bold hover:bg-white/20 transition active:scale-90 backdrop-blur-xl">
+                    ✕
+                </button>
+                <span class="text-xs text-slate-400 font-medium tracking-wide">Swipe or Tap</span>
+                <button type="button" onclick="swipeTopCard('right')" class="w-14 h-14 rounded-full bg-gradient-to-tr from-apple-blue to-apple-purple text-white shadow-xl shadow-purple-500/20 flex items-center justify-center text-xl font-bold hover:opacity-90 transition active:scale-90">
+                    ♥
+                </button>
+            </div>
         </div>
-      </div>
+
+        <!-- Toast Notification Element -->
+        <div id="toast" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-slate-900/90 text-white border border-white/20 px-4 py-2.5 rounded-full text-xs font-semibold shadow-2xl backdrop-blur-xl transition-all duration-300 opacity-0 pointer-events-none z-50 flex items-center space-x-2">
+            <span id="toast-icon">✨</span>
+            <span id="toast-message">Copied to clipboard</span>
+        </div>
+
     </div>
 
-    <!-- Permission Modal -->
-    <div id="permission-modal" class="interactive">
-      <h1>AR Radar Beacon</h1>
-      <p>This demo requires camera, location, and motion sensor access to project real-time 3D directional beacons onto your physical surroundings.</p>
-      <button class="btn" id="start-btn">Initialize AR Sensors</button>
-    </div>
-  </div>
+    <script>
+        /* 6 Friends Profiles with hilarious, absurd roles */
+        const USERS = [
+            { id: 'nihaan', name: 'Nihaan', avatar: '🕵️‍♂️', role: 'CEO of Getting Lost First' },
+            { id: 'asnadh', name: 'Asnadh', avatar: '📦', role: 'MotorMania Parts Smuggler' },
+            { id: 'farhaan', name: 'Farhaan', avatar: '😴', role: 'Chief Executive Nap Officer' },
+            { id: 'ahunaf', name: 'Ahunaf', avatar: '💸', role: 'Head of Wallet Draining' },
+            { id: 'arshadh', name: 'Arshadh', avatar: '🍕', role: 'Emergency Snack Coordinator' },
+            { id: 'lamaan', name: "Lam'aan", avatar: '🗣️', role: 'Aggressive Bargaining Legend' }
+        ];
 
-  <script>
-    // --- State & Coordinates ---
-    const state = {
-      userCoords: { lat: 0, lng: 0 },
-      // Target position (Simulated 35m northeast of initial location)
-      targetCoords: { lat: 0, lng: 0, name: "Alex" },
-      heading: 0,
-      targetDistance: 0,
-      targetBearing: 0,
-      initialized: false
-    };
-
-    // --- DOM Elements ---
-    const cameraFeed = document.getElementById('camera-feed');
-    const arCanvas = document.getElementById('ar-canvas');
-    const radarCanvas = document.getElementById('radar-canvas');
-    const radarCtx = radarCanvas.getContext('2d');
-    const headingVal = document.getElementById('heading-val');
-    const targetDist = document.getElementById('target-dist');
-    const targetBearing = document.getElementById('target-bearing');
-    const offscreenIndicator = document.getElementById('offscreen-indicator');
-    const indicatorArrow = document.getElementById('indicator-arrow');
-    const indicatorText = document.getElementById('indicator-text');
-    const startBtn = document.getElementById('start-btn');
-    const modal = document.getElementById('permission-modal');
-
-    // --- Three.js Setup ---
-    let scene, camera, renderer, beaconMesh, beaconRing;
-
-    function initThreeJS() {
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-      
-      renderer = new THREE.WebGLRenderer({ canvas: arCanvas, alpha: true, antialias: true });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.setPixelRatio(window.devicePixelRatio);
-
-      // Light source
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
-      scene.add(ambientLight);
-
-      const pointLight = new THREE.PointLight(0x10b981, 2, 50);
-      pointLight.position.set(0, 5, 0);
-      scene.add(pointLight);
-
-      // 3D Beacon Node (Glow Cylinder + Ring)
-      const group = new THREE.Group();
-
-      // Inner Core
-      const geoCore = new THREE.CylinderGeometry(0.2, 0.2, 3, 16);
-      const matCore = new THREE.MeshBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.8 });
-      const core = new THREE.Mesh(geoCore, matCore);
-      group.add(core);
-
-      // Outer Pulse Ring
-      const geoRing = new THREE.RingGeometry(0.8, 1.2, 32);
-      const matRing = new THREE.MeshBasicMaterial({ color: 0x3b82f6, side: THREE.DoubleSide, transparent: true, opacity: 0.6 });
-      beaconRing = new THREE.Mesh(geoRing, matRing);
-      beaconRing.rotation.x = Math.PI / 2;
-      group.add(beaconRing);
-
-      beaconMesh = group;
-      scene.add(beaconMesh);
-
-      camera.position.set(0, 0, 0);
-    }
-
-    // --- Geo & Math Utilities ---
-    function toRad(deg) { return deg * (Math.PI / 180); }
-    function toDeg(rad) { return rad * (180 / Math.PI); }
-
-    // Haversine Distance (Meters)
-    function calculateDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371000;
-      const dLat = toRad(lat2 - lat1);
-      const dLon = toRad(lon2 - lon1);
-      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-                Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
-    }
-
-    // Forward Compass Bearing (Degrees)
-    function calculateBearing(lat1, lon1, lat2, lon2) {
-      const y = Math.sin(toRad(lon2 - lon1)) * Math.cos(toRad(lat2));
-      const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
-                Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(toRad(lon2 - lon1));
-      const brng = toDeg(Math.atan2(y, x));
-      return (brng + 360) % 360;
-    }
-
-    // --- Initialization & Hardware Permissions ---
-    startBtn.addEventListener('click', async () => {
-      try {
-        // 1. Camera Feed
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        cameraFeed.srcObject = stream;
-
-        // 2. Geolocation Tracking
-        if ('geolocation' in navigator) {
-          navigator.geolocation.watchPosition(
-            (pos) => {
-              state.userCoords.lat = pos.coords.latitude;
-              state.userCoords.lng = pos.coords.longitude;
-
-              // If target not set yet, simulate target 35m northeast
-              if (state.targetCoords.lat === 0) {
-                state.targetCoords.lat = state.userCoords.lat + 0.00028;
-                state.targetCoords.lng = state.userCoords.lng + 0.00028;
-              }
+        /* Offline Datasets for Vietnam & Bangkok */
+        const DATA = {
+            vietnam: {
+                title: 'Vietnam Portal',
+                flag: '🇻🇳',
+                hotel: {
+                    name: 'SOHO Residence & Hotel',
+                    sub: '100 Co Giang St, District 1, Ho Chi Minh City',
+                    dates: 'Oct 22 - Oct 29, 2026',
+                    address: '100 Co Giang Street, District 1, Ho Chi Minh City, Vietnam'
+                },
+                tip: 'For MotorMania motorcycle parts in Ho Chi Minh City, head to Tan Thanh Market in District 5 early in the morning for wholesale gear and components.',
+                categories: [
+                    { id: 'suppliers', name: 'Spare Parts (MotorMania)', icon: '🏍️', tag: 'Parts & Gear' },
+                    { id: 'malls', name: 'Malls & Shopping', icon: '🛍️', tag: 'Shopping Malls' },
+                    { id: 'food', name: 'Restaurants & Food', icon: '🍜', tag: 'Vietnamese Cuisine' },
+                    { id: 'nightlife', name: 'Nightlife & Bars', icon: '🍸', tag: 'Evening Spots' }
+                ],
+                spots: {
+                    suppliers: [
+                        {
+                            title: 'Tan Thanh Motorcycle Market',
+                            sub: 'District 5, Ho Chi Minh City',
+                            badge: 'MotorMania #1 Hub',
+                            icon: '⚙️',
+                            desc: 'The absolute largest wholesale market for motorcycle spare parts, engine components, custom levers, exhausts, and accessories.',
+                            address: 'Tan Thanh Market, Duong Tan Thanh, Ward 12, District 5, HCMC',
+                            highlights: ['Engine parts', 'Custom exhausts', 'Brake calipers', 'Wholesale prices']
+                        },
+                        {
+                            title: 'Cho Lon Spare Parts Hub',
+                            sub: 'District 5, Chinatown',
+                            badge: 'Wholesale Biker Hub',
+                            icon: '🛠️',
+                            desc: 'Massive district packed with specialized street shops stocking OEM and aftermarket motorcycle components.',
+                            address: 'Cho Lon Area, Tran Hung Dao, District 5, HCMC',
+                            highlights: ['OEM replacements', 'Chains & Sprockets', 'Tires & Rims']
+                        },
+                        {
+                            title: 'District 10 Scooter Parts Street',
+                            sub: 'Ly Thai To Street, District 10',
+                            badge: 'Custom & Racing',
+                            icon: '🛵',
+                            desc: 'Famous stretch of shops specializing in modern performance tuning, suspensions, custom LED lighting, and racing kits.',
+                            address: 'Ly Thai To Street, District 10, HCMC',
+                            highlights: ['Ohlins suspensions', 'RCB performance parts', 'Custom graphics']
+                        },
+                        {
+                            title: 'Cho Cu Biker Street (Nguyen Cong Tru)',
+                            sub: 'District 1, Ho Chi Minh City',
+                            badge: 'Near Hotel',
+                            icon: '🔧',
+                            desc: 'Conveniently close to SOHO Residence. Features vintage bike spare parts, quick tools, and specialized gear.',
+                            address: 'Nguyen Cong Tru Street, District 1, HCMC',
+                            highlights: ['Close to SOHO Residence', 'Quick accessories', 'Helmet shops']
+                        }
+                    ],
+                    malls: [
+                        {
+                            title: 'Takashimaya & Saigon Centre',
+                            sub: 'District 1, Ho Chi Minh City',
+                            badge: 'Luxury Shopping',
+                            icon: '🏬',
+                            desc: 'Premier multi-level shopping destination featuring international brands, electronics, and air-conditioned food courts.',
+                            address: '65 Le Loi, Ben Nghe, District 1, HCMC',
+                            highlights: ['Designer brands', 'Air-conditioned', 'Gourmet food basement']
+                        },
+                        {
+                            title: 'Vincom Center Landmark 81',
+                            sub: 'Binh Thanh District',
+                            badge: 'Tallest Tower',
+                            icon: '🏙️',
+                            desc: 'Vietnam’s tallest skyscraper with high-end shops, ice skating rink, and sky-deck views over the Saigon River.',
+                            address: '720A Dien Bien Phu, Ward 22, Binh Thanh, HCMC',
+                            highlights: ['Sky deck views', 'Ice skating', 'International dining']
+                        },
+                        {
+                            title: 'Ben Thanh Night Market',
+                            sub: 'District 1, Ho Chi Minh City',
+                            badge: 'Local Souvenirs',
+                            icon: '🏮',
+                            desc: 'Iconic market for leather goods, t-shirts, local coffee beans, and vibrant street food stalls.',
+                            address: 'Le Loi Street, Ben Thanh Ward, District 1, HCMC',
+                            highlights: ['Souvenirs', 'Bargaining', 'Street food stalls']
+                        }
+                    ],
+                    food: [
+                        {
+                            title: 'Banh Mi Huynh Hoa',
+                            sub: 'District 1, Ho Chi Minh City',
+                            badge: 'Best Banh Mi',
+                            icon: '🥖',
+                            desc: 'Legendary sandwich shop packed with savory cold cuts, homemade pate, and fresh herbs.',
+                            address: '26 Le Thi Rieng, Ben Thanh Ward, District 1, HCMC',
+                            highlights: ['Ultra thick pate', 'Crispy baguettes', 'Local favorite']
+                        },
+                        {
+                            title: 'Pho Phu Vuong',
+                            sub: 'District 1, Ho Chi Minh City',
+                            badge: 'Authentic Pho',
+                            icon: '🍲',
+                            desc: 'Famous for rich aromatic broth, tender sliced beef brisket, and fresh local herbs.',
+                            address: '120 Nguyen Thai Hoc, District 1, HCMC',
+                            highlights: ['Rich broth', 'Tender brisket', 'Late night open']
+                        },
+                        {
+                            title: 'Pizza 4P’s Ben Thanh',
+                            sub: 'District 1, Ho Chi Minh City',
+                            badge: 'Artisanal Craft',
+                            icon: '🍕',
+                            desc: 'World-renowned wood-fired pizzas with house-made burrata cheese and Japanese fusion toppings.',
+                            address: '8 Thu Khoa Huan, Ben Thanh Ward, District 1, HCMC',
+                            highlights: ['Fresh house burrata', 'Craft beers', 'Wood-fired oven']
+                        }
+                    ],
+                    nightlife: [
+                        {
+                            title: 'Bui Vien Walking Street',
+                            sub: 'District 1, Ho Chi Minh City',
+                            badge: 'Party Central',
+                            icon: '🍻',
+                            desc: 'Electric night hub filled with neon lights, live DJ music, street performance, and cold draft beers.',
+                            address: 'Bui Vien Street, Pham Ngu Lao Ward, District 1, HCMC',
+                            highlights: ['Neon bars', 'Live music', 'Cheap cold beer']
+                        },
+                        {
+                            title: 'Chill Skybar Saigon',
+                            sub: 'AB Tower, District 1',
+                            badge: 'Rooftop Vibe',
+                            icon: '🍸',
+                            desc: 'Sleek open-air lounge offering panoramic skyline views, signature cocktails, and resident DJs.',
+                            address: '26th Floor, AB Tower, 76A Le Lai, District 1, HCMC',
+                            highlights: ['360 Skyline view', 'Craft cocktails', 'DJ sets']
+                        }
+                    ]
+                }
             },
-            (err) => console.warn(err),
-            { enableHighAccuracy: true }
-          );
+            bangkok: {
+                title: 'Bangkok Portal',
+                flag: '🇹🇭',
+                hotel: {
+                    name: 'Grand Watergate Hotel',
+                    sub: 'Pratunam, Ratchathewi, Bangkok',
+                    dates: 'Oct 29 - Oct 31, 2026',
+                    address: '50/1 Rajprarop Road, Pratunam, Ratchathewi, Bangkok 10400, Thailand'
+                },
+                tip: 'Your hotel is in Pratunam! Step right outside for Pratunam Night Market street food, Platinum Fashion Mall, and quick tuk-tuk rides to Siam.',
+                categories: [
+                    { id: 'malls', name: 'Malls & Shopping', icon: '🛍️', tag: 'Siam & Pratunam' },
+                    { id: 'food', name: 'Restaurants & Food', icon: '🇹🇭', tag: 'Thai Street Food' },
+                    { id: 'nightlife', name: 'Nightlife & Fun', icon: '🎉', tag: 'Rooftops & Clubs' },
+                    { id: 'suppliers', name: 'Electronics & Tech', icon: '🔌', tag: 'Fortune Town' }
+                ],
+                spots: {
+                    malls: [
+                        {
+                            title: 'Siam Paragon & Siam Center',
+                            sub: 'Pathum Wan, Bangkok',
+                            badge: 'World Class Mall',
+                            icon: '💎',
+                            desc: 'Massive shopping complex with luxury fashion, Sea Life Aquarium, gourmet dining, and flagship stores.',
+                            address: '991 Rama I Road, Pathum Wan, Bangkok 10330',
+                            highlights: ['Luxury boutiques', 'Gourmet food hall', 'Cineplex']
+                        },
+                        {
+                            title: 'Platinum Fashion Mall',
+                            sub: 'Pratunam (Next to Hotel)',
+                            badge: 'Wholesale Bargains',
+                            icon: '👕',
+                            desc: 'Air-conditioned wholesale haven for clothes, sneakers, accessories, and luggage at dirt-cheap prices.',
+                            address: '222 Phetchaburi Road, Ratchathewi, Bangkok 10400',
+                            highlights: ['2 mins from hotel', 'Wholesale clothes', 'Giant food court']
+                        },
+                        {
+                            title: 'CentralWorld Mall',
+                            sub: 'Ratchadamri Road',
+                            badge: 'Mega Complex',
+                            icon: '🏬',
+                            desc: 'One of Southeast Asia’s largest shopping plazas featuring tech stores, craft beer stalls, and outdoor markets.',
+                            address: '999/9 Rama I Road, Pathum Wan, Bangkok 10330',
+                            highlights: ['Apple Store CentralWorld', 'Craft food market', 'Massive floorplan']
+                        }
+                    ],
+                    food: [
+                        {
+                            title: 'Go-Ang Pratunam Chicken Rice',
+                            sub: 'Pratunam, Bangkok',
+                            badge: 'Michelin Bib Gourmand',
+                            icon: '🍗',
+                            desc: 'Famous pink-shirt chicken rice shop right down the street from Grand Watergate Hotel. Tender chicken and spicy garlic sauce.',
+                            address: '962 Phetchaburi Road, Makkasan, Ratchathewi, Bangkok',
+                            highlights: ['Michelin Guide', 'Walking distance', 'Signature spicy sauce']
+                        },
+                        {
+                            title: 'Jay Fai Street Food (Crab Omelette)',
+                            sub: 'Old City, Bangkok',
+                            badge: '1 Michelin Star',
+                            icon: '🍳',
+                            desc: 'Iconic street food queen cooking wok-charred crab omelettes and drunken noodles over red-hot charcoal.',
+                            address: '327 Maha Chai Rd, Samran Rat, Phra Nakhon, Bangkok',
+                            highlights: ['Crab omelette', 'Charcoal wok', 'Michelin star']
+                        },
+                        {
+                            title: 'Jeh O Chula (Mama Tom Yum)',
+                            sub: 'Pathum Wan, Bangkok',
+                            badge: 'Late Night Legend',
+                            icon: '🍜',
+                            desc: 'Famous late-night spot serving massive pots of spicy Tom Yum noodles loaded with crispy pork belly, squid, and eggs.',
+                            address: '113 Rong Muang, Pathum Wan, Bangkok 10330',
+                            highlights: ['Giant Tom Yum pot', 'Crispy pork', 'Late night craving']
+                        }
+                    ],
+                    nightlife: [
+                        {
+                            title: 'Tichuca Rooftop Bar',
+                            sub: 'Sukhumvit, Bangkok',
+                            badge: 'Jungle Rooftop',
+                            icon: '🌴',
+                            desc: 'Viral rooftop bar with an immense glowing LED jellyfish canopy, tropical cocktails, and skyline beats.',
+                            address: '46th Floor, T-One Building, 8 Sukhumvit 40, Bangkok',
+                            highlights: ['Glowing LED tree', '360 City skyline', 'Tropical cocktails']
+                        },
+                        {
+                            title: 'Khao San Road',
+                            sub: 'Phra Nakhon, Bangkok',
+                            badge: 'Backpacker Central',
+                            icon: '🍻',
+                            desc: 'Legendary party street overflowing with neon lights, bass-pumping bars, street food stalls, and party crowds.',
+                            address: 'Khao San Road, Talat Yot, Phra Nakhon, Bangkok',
+                            highlights: ['Street party', 'Cheap buckets', 'Laughing gas & music']
+                        }
+                    ],
+                    suppliers: [
+                        {
+                            title: 'Fortune Town IT Mall',
+                            sub: 'Ratchadaphisek Rd',
+                            badge: 'Electronics & Audio',
+                            icon: '⚡',
+                            desc: 'Best electronics mall in Bangkok for action cameras, drone accessories, power banks, and audio gear.',
+                            address: '1 Ratchadaphisek Rd, Din Daeng, Bangkok 10400',
+                            highlights: ['Action cams', 'Drone parts', 'Power banks']
+                        },
+                        {
+                            title: 'Khlong Thom Hardware Market',
+                            sub: 'Chinatown, Bangkok',
+                            badge: 'Tools & Accessories',
+                            icon: '🛠️',
+                            desc: 'Bustling market packed with mechanics tools, LED lights, bike accessories, and hardware components.',
+                            address: 'Luang Road, Pom Prap Sattru Phai, Bangkok 10100',
+                            highlights: ['Tools', 'Gadgets', 'LED lights']
+                        }
+                    ]
+                }
+            }
+        };
+
+        let state = {
+            user: USERS[0],
+            location: 'vietnam',
+            category: 'suppliers',
+            cards: [],
+            currentCardIndex: 0,
+            modalOpen: false,
+            swipeLocked: false
+        };
+
+        const $ = (id) => document.getElementById(id);
+
+        function escapeHTML(value) {
+            return String(value ?? '').replace(/[&<>"']/g, char => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            }[char]));
         }
 
-        // 3. Orientation / Compass
-        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-          const permission = await DeviceOrientationEvent.requestPermission();
-          if (permission === 'granted') {
-            window.addEventListener('deviceorientation', handleOrientation);
-          }
-        } else {
-          window.addEventListener('deviceorientation', handleOrientation);
+        function getLocationData() {
+            return DATA[state.location] || DATA.vietnam;
         }
 
-        initThreeJS();
-        modal.style.display = 'none';
-        state.initialized = true;
-        animate();
-
-      } catch (e) {
-        alert("Camera or sensor access denied. " + e.message);
-      }
-    });
-
-    function handleOrientation(e) {
-      // iOS webkitCompassHeading vs Android alpha
-      if (e.webkitCompassHeading) {
-        state.heading = e.webkitCompassHeading;
-      } else if (e.alpha) {
-        state.heading = (360 - e.alpha) % 360;
-      }
-      headingVal.innerText = Math.round(state.heading);
-    }
-
-    // --- Radar Drawing Function ---
-    function drawRadar() {
-      const w = radarCanvas.width;
-      const h = radarCanvas.height;
-      const cx = w / 2;
-      const cy = h / 2;
-
-      radarCtx.clearRect(0, 0, w, h);
-
-      // Outer rings
-      radarCtx.strokeStyle = 'rgba(16, 185, 129, 0.25)';
-      radarCtx.lineWidth = 1.5;
-      radarCtx.beginPath(); radarCtx.arc(cx, cy, 35, 0, Math.PI * 2); radarCtx.stroke();
-      radarCtx.beginPath(); radarCtx.arc(cx, cy, 70, 0, Math.PI * 2); radarCtx.stroke();
-
-      // Heading indicator line (Top = Device Facing)
-      radarCtx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-      radarCtx.beginPath();
-      radarCtx.moveTo(cx, cy);
-      radarCtx.lineTo(cx, cy - 75);
-      radarCtx.stroke();
-
-      // Target Blip
-      if (state.targetDistance > 0) {
-        const relativeAngle = toRad(state.targetBearing - state.heading);
-        // Scale distance to radar radius (max 100m)
-        const radius = Math.min(state.targetDistance / 100, 1) * 70;
-
-        const blipX = cx + radius * Math.sin(relativeAngle);
-        const blipY = cy - radius * Math.cos(relativeAngle);
-
-        // Draw Target Dot
-        radarCtx.fillStyle = '#10b981';
-        radarCtx.shadowColor = '#10b981';
-        radarCtx.shadowBlur = 10;
-        radarCtx.beginPath();
-        radarCtx.arc(blipX, blipY, 5, 0, Math.PI * 2);
-        radarCtx.fill();
-        radarCtx.shadowBlur = 0;
-      }
-    }
-
-    // --- Render Loop ---
-    function animate() {
-      requestAnimationFrame(animate);
-
-      if (!state.initialized) return;
-
-      // Calculate Target Vector
-      if (state.userCoords.lat !== 0) {
-        state.targetDistance = calculateDistance(
-          state.userCoords.lat, state.userCoords.lng,
-          state.targetCoords.lat, state.targetCoords.lng
-        );
-
-        state.targetBearing = calculateBearing(
-          state.userCoords.lat, state.userCoords.lng,
-          state.targetCoords.lat, state.targetCoords.lng
-        );
-
-        targetDist.innerText = `${Math.round(state.targetDistance)}m`;
-        targetBearing.innerText = `${Math.round(state.targetBearing)}°`;
-      }
-
-      // Calculate Relative Angle (Device Heading vs Target Bearing)
-      let relativeAngle = (state.targetBearing - state.heading + 360) % 360;
-      if (relativeAngle > 180) relativeAngle -= 360; // Range [-180, 180]
-
-      // Update 3D Beacon Matrix Offset
-      const cameraFOV = 60; // Horiz FOV approx
-      const rad = toRad(relativeAngle);
-      
-      // Position beacon in 3D Space
-      beaconMesh.position.x = Math.sin(rad) * 10;
-      beaconMesh.position.z = -Math.cos(rad) * 10;
-      beaconMesh.position.y = -1.5; // Slightly below horizon
-
-      // Animate Beacon Ring Expansion
-      const time = Date.now() * 0.003;
-      beaconRing.scale.set(1 + Math.sin(time) * 0.2, 1 + Math.sin(time) * 0.2, 1);
-
-      // Screen Off-Screen Indicator Logic
-      if (Math.abs(relativeAngle) > cameraFOV / 2) {
-        offscreenIndicator.style.display = 'flex';
-        if (relativeAngle < 0) {
-          offscreenIndicator.className = 'left';
-          indicatorArrow.innerText = '◄';
-          indicatorText.innerText = `Turn Left (${Math.abs(Math.round(relativeAngle))}°)`;
-        } else {
-          offscreenIndicator.className = 'right';
-          indicatorArrow.innerText = '►';
-          indicatorText.innerText = `Turn Right (${Math.round(relativeAngle)}°)`;
+        function getCategoryData() {
+            const loc = getLocationData();
+            return loc.categories.find(category => category.id === state.category) || loc.categories[0];
         }
-      } else {
-        offscreenIndicator.style.display = 'none';
-      }
 
-      // Render 3D Scene
-      renderer.render(scene, camera);
+        document.addEventListener('DOMContentLoaded', () => {
+            renderUserGrid();
+            setupKeyboardShortcuts();
+            setupModalAccessibility();
+        });
 
-      // Render Radar HUD
-      drawRadar();
-    }
+        function renderUserGrid() {
+            const grid = $('user-grid');
+            if (!grid) return;
 
-    // Window Resize Handler
-    window.addEventListener('resize', () => {
-      if (!renderer) return;
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-  </script>
+            grid.innerHTML = USERS.map(user => `
+                <button type="button" aria-label="Select ${escapeHTML(user.name)}"
+                    data-user-id="${escapeHTML(user.id)}"
+                    class="text-left p-4 rounded-3xl liquid-glass hover:bg-white/10 transition-all group flex flex-col justify-between border border-white/15 relative overflow-hidden active:scale-95">
+                    <div class="flex items-center space-x-3 mb-2">
+                        <span class="text-3xl p-2 bg-white/10 rounded-2xl border border-white/10 group-hover:scale-110 transition-transform">${escapeHTML(user.avatar)}</span>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-white text-base tracking-tight">${escapeHTML(user.name)}</h3>
+                        <p class="text-[11px] text-purple-300 font-medium leading-snug mt-1">${escapeHTML(user.role)}</p>
+                    </div>
+                </button>
+            `).join('');
+
+            grid.querySelectorAll('[data-user-id]').forEach(button => {
+                button.addEventListener('click', () => selectUser(button.dataset.userId));
+            });
+        }
+
+        function goToScreen(screenId) {
+            const screenIds = ['screen-user', 'screen-location', 'screen-dashboard'];
+            screenIds.forEach(id => $(id)?.classList.toggle('hidden', id !== screenId));
+
+            const badge = $('active-info-badge');
+            badge?.classList.toggle('hidden', screenId !== 'screen-dashboard');
+
+            if (screenId !== 'screen-dashboard') {
+                $('screen-dashboard')?.scrollTo({ top: 0, behavior: 'auto' });
+            }
+        }
+
+        function selectUser(userId) {
+            state.user = USERS.find(user => user.id === userId) || USERS[0];
+
+            $('badge-user-avatar').textContent = state.user.avatar;
+            $('badge-user-name').textContent = state.user.name;
+            $('dash-user-avatar').textContent = state.user.avatar;
+            $('dash-user-name').textContent = state.user.name;
+
+            goToScreen('screen-location');
+        }
+
+        function selectLocation(locKey) {
+            if (!DATA[locKey]) return;
+
+            state.location = locKey;
+            const locData = DATA[locKey];
+
+            $('badge-location-flag').textContent = locData.flag;
+            $('badge-location-name').textContent = locKey === 'vietnam' ? 'Vietnam' : 'Bangkok';
+            $('dash-location-title').textContent = locData.title;
+
+            $('hotel-name').textContent = locData.hotel.name;
+            $('hotel-sub').textContent = locData.hotel.sub;
+            $('hotel-dates').textContent = locData.hotel.dates;
+            $('dashboard-tip').textContent = locData.tip;
+
+            renderCategories();
+            goToScreen('screen-dashboard');
+        }
+
+        function openLocationSelector() {
+            closeCardModal();
+            goToScreen('screen-location');
+        }
+
+        function renderCategories() {
+            const locData = getLocationData();
+            const grid = $('category-grid');
+            if (!grid) return;
+
+            grid.innerHTML = locData.categories.map(cat => `
+                <button type="button" data-category-id="${escapeHTML(cat.id)}"
+                    aria-label="Open ${escapeHTML(cat.name)}"
+                    class="p-4 rounded-3xl liquid-glass hover:bg-white/10 transition-all border border-white/15 flex flex-col justify-between text-left group active:scale-95">
+                    <span class="text-3xl p-2.5 bg-white/10 rounded-2xl border border-white/10 w-fit group-hover:scale-110 transition-transform">${escapeHTML(cat.icon)}</span>
+                    <div class="mt-4">
+                        <span class="text-[9px] font-extrabold tracking-widest uppercase bg-white/10 px-2 py-0.5 rounded-full text-purple-300 border border-white/10">${escapeHTML(cat.tag)}</span>
+                        <h4 class="font-bold text-white text-sm mt-1.5">${escapeHTML(cat.name)}</h4>
+                    </div>
+                </button>
+            `).join('');
+
+            grid.querySelectorAll('[data-category-id]').forEach(button => {
+                button.addEventListener('click', () => openCategoryModal(button.dataset.categoryId));
+            });
+        }
+
+        function openCategoryModal(catId) {
+            const locData = getLocationData();
+            const catInfo = locData.categories.find(category => category.id === catId);
+            if (!catInfo) return;
+
+            state.category = catId;
+            state.cards = Array.isArray(locData.spots[catId]) ? locData.spots[catId] : [];
+            state.currentCardIndex = 0;
+            state.swipeLocked = false;
+            state.modalOpen = true;
+
+            $('modal-category-tag').textContent = catInfo.name;
+            $('modal-cards').classList.remove('hidden');
+            document.body.classList.add('overflow-hidden');
+            renderCardStack();
+
+            // Move focus into the modal for keyboard/switch-control users.
+            requestAnimationFrame(() => $('modal-close-button')?.focus());
+        }
+
+        function closeCardModal() {
+            state.modalOpen = false;
+            state.swipeLocked = false;
+            $('modal-cards')?.classList.add('hidden');
+            document.body.classList.remove('overflow-hidden');
+        }
+
+        function renderCardStack() {
+            const container = $('card-stack');
+            if (!container) return;
+
+            container.innerHTML = '';
+
+            if (state.currentCardIndex >= state.cards.length) {
+                container.innerHTML = `
+                    <div class="w-full h-full liquid-glass-card rounded-3xl p-6 flex flex-col items-center justify-center text-center border border-white/20">
+                        <span class="text-5xl mb-3">🎉</span>
+                        <h3 class="text-xl font-bold text-white">All Spots Explored!</h3>
+                        <p class="text-xs text-slate-400 mt-2">You have reviewed all recommendations in this category.</p>
+                        <button type="button" id="replay-deck-button"
+                            class="mt-5 px-5 py-2.5 bg-gradient-to-r from-apple-blue to-apple-purple text-white text-xs font-bold rounded-2xl shadow-lg active:scale-95 transition">
+                            Replay Deck ↺
+                        </button>
+                    </div>
+                `;
+                $('modal-stack-counter').textContent = 'Completed';
+                $('replay-deck-button')?.addEventListener('click', resetCardStack);
+                return;
+            }
+
+            $('modal-stack-counter').textContent =
+                `${state.currentCardIndex + 1} of ${state.cards.length} spots`;
+
+            // Only render a small number of cards. Rendering the entire remaining
+            // deck caused unnecessary DOM/layout work on mobile devices.
+            const visibleCards = Math.min(4, state.cards.length - state.currentCardIndex);
+
+            for (let offset = visibleCards - 1; offset >= 0; offset--) {
+                const i = state.currentCardIndex + offset;
+                const item = state.cards[i];
+                const isTop = offset === 0;
+
+                const cardEl = document.createElement('div');
+                cardEl.className =
+                    `swipe-card liquid-glass-card rounded-3xl p-6 flex flex-col justify-between border border-white/20 select-none ${isTop ? 'z-20' : 'z-10 opacity-70 pointer-events-none'}`;
+
+                if (!isTop) {
+                    const scale = 1 - (offset * 0.05);
+                    const translateY = offset * 12;
+                    cardEl.style.transform =
+                        `translate3d(0, ${translateY}px, 0) scale(${scale})`;
+                }
+
+                const safeAddress = escapeHTML(item.address);
+                cardEl.innerHTML = `
+                    <div>
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-3xl p-2.5 bg-white/10 rounded-2xl border border-white/10">${escapeHTML(item.icon)}</span>
+                            <span class="text-[10px] font-bold px-2.5 py-1 bg-purple-500/20 text-purple-200 border border-purple-500/30 rounded-full">${escapeHTML(item.badge)}</span>
+                        </div>
+                        <h3 class="text-xl font-extrabold text-white mt-4 tracking-tight">${escapeHTML(item.title)}</h3>
+                        <p class="text-xs text-purple-300 font-medium mt-0.5">${escapeHTML(item.sub)}</p>
+                        <p class="text-xs text-slate-300 mt-3 leading-relaxed">${escapeHTML(item.desc)}</p>
+                        <div class="mt-4 flex flex-wrap gap-1.5">
+                            ${item.highlights.map(h => `<span class="text-[10px] px-2 py-0.5 bg-white/10 text-slate-200 rounded-md border border-white/10">✓ ${escapeHTML(h)}</span>`).join('')}
+                        </div>
+                    </div>
+                    <div class="pt-4 border-t border-white/10 flex justify-between items-center gap-3">
+                        <div class="text-[10px] text-slate-400 truncate flex-1 min-w-0">📍 ${safeAddress}</div>
+                        <button type="button" class="copy-card-address shrink-0 px-3 py-1.5 bg-white text-slate-900 font-bold rounded-xl text-xs active:scale-95 transition">
+                            Copy
+                        </button>
+                    </div>
+                `;
+
+                const copyButton = cardEl.querySelector('.copy-card-address');
+                copyButton?.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    copyText(item.address);
+                });
+
+                if (isTop) attachSwipePhysics(cardEl);
+                container.appendChild(cardEl);
+            }
+        }
+
+        function resetCardStack() {
+            state.currentCardIndex = 0;
+            state.swipeLocked = false;
+            renderCardStack();
+        }
+
+        function attachSwipePhysics(element) {
+            let startX = 0;
+            let startY = 0;
+            let currentX = 0;
+            let currentY = 0;
+            let isDragging = false;
+            let pointerActive = false;
+
+            const getPoint = event => {
+                if (event.touches?.length) {
+                    return { x: event.touches[0].clientX, y: event.touches[0].clientY };
+                }
+                return { x: event.clientX, y: event.clientY };
+            };
+
+            const onStart = event => {
+                if (state.swipeLocked) return;
+                // Ignore drag gestures beginning on interactive controls.
+                if (event.target.closest('button, a, input, textarea, select')) return;
+
+                const point = getPoint(event);
+                startX = currentX = point.x;
+                startY = currentY = point.y;
+                isDragging = true;
+                pointerActive = true;
+                element.classList.add('dragging');
+
+                if (event.cancelable) event.preventDefault();
+            };
+
+            const onMove = event => {
+                if (!isDragging || !pointerActive) return;
+
+                const point = getPoint(event);
+                currentX = point.x - startX;
+                currentY = point.y - startY;
+
+                // Horizontal intent controls the deck; vertical movement is capped
+                // to keep the interaction stable on short phone screens.
+                const rotate = Math.max(-25, Math.min(25, currentX * 0.08));
+                const y = Math.max(-80, Math.min(80, currentY));
+                element.style.transform =
+                    `translate3d(${currentX}px, ${y}px, 0) rotate(${rotate}deg)`;
+
+                if (event.cancelable) event.preventDefault();
+            };
+
+            const finish = () => {
+                if (!isDragging) return;
+                isDragging = false;
+                pointerActive = false;
+                element.classList.remove('dragging');
+
+                const threshold = Math.max(90, element.offsetWidth * 0.25);
+                if (currentX > threshold) {
+                    completeSwipe('right');
+                } else if (currentX < -threshold) {
+                    completeSwipe('left');
+                } else {
+                    element.style.transform = 'translate3d(0, 0, 0) rotate(0deg)';
+                }
+
+                currentX = 0;
+                currentY = 0;
+            };
+
+            // Pointer Events are supported by modern iOS/Android browsers and
+            // avoid duplicate touch + mouse listeners.
+            element.addEventListener('pointerdown', onStart, { passive: false });
+            element.addEventListener('pointermove', onMove, { passive: false });
+            element.addEventListener('pointerup', finish, { passive: true });
+            element.addEventListener('pointercancel', finish, { passive: true });
+            element.addEventListener('lostpointercapture', finish, { passive: true });
+        }
+
+        function completeSwipe(direction) {
+            if (state.swipeLocked) return;
+
+            const container = $('card-stack');
+            const topCard = container?.querySelector('.swipe-card.z-20');
+            if (!topCard) return;
+
+            state.swipeLocked = true;
+            topCard.classList.add(direction === 'left' ? 'swiped-left' : 'swiped-right');
+
+            window.setTimeout(() => {
+                state.currentCardIndex++;
+                state.swipeLocked = false;
+                renderCardStack();
+            }, 220);
+        }
+
+        function swipeTopCard(direction) {
+            completeSwipe(direction);
+        }
+
+        function setupKeyboardShortcuts() {
+            document.addEventListener('keydown', event => {
+                if (!state.modalOpen) return;
+
+                if (event.key === 'ArrowLeft') {
+                    event.preventDefault();
+                    swipeTopCard('left');
+                } else if (event.key === 'ArrowRight') {
+                    event.preventDefault();
+                    swipeTopCard('right');
+                } else if (event.key === 'Escape') {
+                    event.preventDefault();
+                    closeCardModal();
+                }
+            });
+        }
+
+        function setupModalAccessibility() {
+            const modal = $('modal-cards');
+            modal?.setAttribute('role', 'dialog');
+            modal?.setAttribute('aria-modal', 'true');
+            modal?.setAttribute('aria-labelledby', 'modal-category-tag');
+
+            const closeButton = modal?.querySelector('button[onclick="closeCardModal()"]');
+            if (closeButton) closeButton.id = 'modal-close-button';
+
+            $('modal-cards')?.addEventListener('click', event => {
+                if (event.target === $('modal-cards')) closeCardModal();
+            });
+        }
+
+        async function copyText(text) {
+            const value = String(text ?? '');
+            if (!value) return;
+
+            try {
+                if (navigator.clipboard?.writeText && window.isSecureContext) {
+                    await navigator.clipboard.writeText(value);
+                    showToast("Address copied to clipboard!");
+                    return;
+                }
+            } catch (_) {
+                // Fall through to the iOS-compatible legacy method.
+            }
+
+            const textArea = document.createElement('textarea');
+            textArea.value = value;
+            textArea.setAttribute('readonly', '');
+            textArea.style.position = 'fixed';
+            textArea.style.top = '0';
+            textArea.style.left = '0';
+            textArea.style.width = '1px';
+            textArea.style.height = '1px';
+            textArea.style.opacity = '0';
+            textArea.style.pointerEvents = 'none';
+
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            textArea.setSelectionRange(0, value.length);
+
+            let copied = false;
+            try {
+                copied = document.execCommand('copy');
+            } catch (_) {
+                copied = false;
+            }
+
+            textArea.remove();
+            showToast(copied ? "Address copied to clipboard!" : "Copy failed — please copy manually");
+        }
+
+        function copyAddress() {
+            copyText(getLocationData().hotel.address);
+        }
+
+        let toastTimer = 0;
+
+        function showToast(message) {
+            const toast = $('toast');
+            const toastMsg = $('toast-message');
+            if (!toast || !toastMsg) return;
+
+            toastMsg.textContent = message;
+            toast.classList.remove('opacity-0', 'pointer-events-none');
+            toast.classList.add('opacity-100');
+
+            window.clearTimeout(toastTimer);
+            toastTimer = window.setTimeout(() => {
+                toast.classList.remove('opacity-100');
+                toast.classList.add('opacity-0', 'pointer-events-none');
+            }, 2200);
+        }
+    </script>
 </body>
 </html>
